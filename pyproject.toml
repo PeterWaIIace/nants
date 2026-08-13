@@ -7,7 +7,12 @@ authors = [
     { name = "Iliya Zhechev", email = "iliya.zhechev@gmail.com" }
 ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "matplotlib>=3.11.1",
+    "numpy>=2.5.1",
+    "pillow>=12.3.0",
+    "torch>=2.13.0",
+]
 
 [project.scripts]
 leniaghton = "leniaghton:main"
@@ -15,3 +20,14 @@ leniaghton = "leniaghton:main"
 [build-system]
 requires = ["uv_build>=0.9.27,<0.10.0"]
 build-backend = "uv_build"
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu" }
+
+[[tool.uv.index]]
+name = "pytorch-cu"
+url = "https://download.pytorch.org/whl/cu129"
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
