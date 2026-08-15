@@ -13,9 +13,9 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw, ImageFont
 
-from leniaghton.ant import LIMIT
-from leniaghton.brain import Brain
-from leniaghton.world import World
+from nants.ant import LIMIT
+from nants.brain import Brain
+from nants.world import World
 
 SIZE = 48  # the field
 BATCH = 1024
@@ -200,7 +200,7 @@ def speed_up():
     Only `sense` is worth compiling. The brain samples its move with a
     generator, which defeats the compiler and comes out slower.
     """
-    from leniaghton import ant as ant_module
+    from nants import ant as ant_module
 
     ant_module.Ant.sense = torch.compile(ant_module.Ant.sense)
 

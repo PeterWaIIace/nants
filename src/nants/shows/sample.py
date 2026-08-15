@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from leniaghton.brain import Brain
-from leniaghton.render import Recorder
-from leniaghton.world import World
+from nants.brain import Brain
+from nants.render import Recorder
+from nants.world import World
 
 OUT = Path("out")
 N_BRAINS = 24

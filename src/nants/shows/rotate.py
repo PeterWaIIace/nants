@@ -11,9 +11,9 @@ import numpy as np
 import torch
 from PIL import Image
 
-import paint
-import train
-from leniaghton.world import World
+from nants.shows import paint
+from nants import train
+from nants.world import World
 
 FACES = ["up (as trained)", "right", "down", "left"]
 

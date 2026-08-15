@@ -12,10 +12,10 @@ import numpy as np
 import torch
 from PIL import Image
 
-import paint
-import showcase
-import train
-from leniaghton.world import World
+from nants.shows import paint
+from nants.shows import showcase
+from nants import train
+from nants.world import World
 
 ZOOM = 5
 ANGLES = [0, 45, 90, 135]  # degrees to turn the kernels by

@@ -11,8 +11,8 @@ from pathlib import Path
 
 import torch
 
-import train
-from leniaghton import ant as ant_module
+from nants import train
+from nants import ant as ant_module
 
 CLOCKED = 8  # how many clock inputs the old brain had
 

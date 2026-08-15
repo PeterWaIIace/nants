@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
-from leniaghton import ant as ant_module
+from nants import ant as ant_module
 
 SIZE = 48  # matches the field it was trained on
 RUNS = 9
@@ -76,12 +76,12 @@ def main():
     ck = match_clock(run / "best.pt", cell_dim=16)
     import importlib
 
-    from leniaghton import brain as brain_module
+    from nants import brain as brain_module
     importlib.reload(brain_module)
     train.Brain = brain_module.Brain
 
     import paint
-    from leniaghton.world import World
+    from nants.world import World
 
     brain = train.Brain(
         RUNS, cell_dim=train.CELL_DIM, width=128, seed=0,

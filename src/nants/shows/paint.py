@@ -7,8 +7,8 @@ import numpy as np
 import torch
 from PIL import Image
 
-import train
-from leniaghton.world import World
+from nants import train
+from nants.world import World
 
 BATCH = 9  # nine rollouts of the same brain, to see how much they vary
 EVERY = 10  # one frame every EVERY steps

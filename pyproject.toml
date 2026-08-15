@@ -1,7 +1,7 @@
 [project]
-name = "leniaghton"
+name = "nants"
 version = "0.1.0"
-description = "Add your description here"
+description = "A colony of memoryless ants that paints a picture"
 readme = "README.md"
 authors = [
     { name = "Iliya Zhechev", email = "iliya.zhechev@gmail.com" }
@@ -15,7 +15,17 @@ dependencies = [
 ]
 
 [project.scripts]
-leniaghton = "leniaghton:main"
+nants-train = "nants.train:main"
+nants-showcase = "nants.shows.showcase:main"
+nants-crowd = "nants.shows.crowd:main"
+nants-colony = "nants.shows.colony:main"
+nants-regen = "nants.shows.regen:main"
+nants-twist = "nants.shows.twist:main"
+nants-partial = "nants.shows.partial:main"
+nants-scatter = "nants.shows.scatter:main"
+nants-paint = "nants.shows.paint:main"
+nants-sample = "nants.shows.sample:main"
+nants-weights = "nants.shows.export_weights:main"
 
 [build-system]
 requires = ["uv_build>=0.9.27,<0.10.0"]

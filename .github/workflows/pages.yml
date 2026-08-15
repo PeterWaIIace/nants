@@ -1,10 +1,10 @@
 name: demo
 
-# publishes the demo folder as the site root, so the folder can keep its name
+# the demo lives on the website branch; this publishes it as the site root
 
 on:
   push:
-    branches: [main]
+    branches: [website]
   workflow_dispatch:
 
 permissions:
@@ -21,10 +21,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: website
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: demo
+          path: .
 
   deploy:
     needs: build

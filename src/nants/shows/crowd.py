@@ -17,9 +17,9 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
-import showcase
-import train
-from leniaghton.world import World
+from nants.shows import showcase
+from nants import train
+from nants.world import World
 
 COLS = 3
 ROWS = 3

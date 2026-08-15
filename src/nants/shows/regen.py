@@ -11,10 +11,10 @@ import numpy as np
 import torch
 from PIL import Image
 
-import paint
-import showcase
-import train
-from leniaghton.world import World
+from nants.shows import paint
+from nants.shows import showcase
+from nants import train
+from nants.world import World
 
 ZOOM = 5
 CUT_AT = 0.5  # do the damage this far through the run

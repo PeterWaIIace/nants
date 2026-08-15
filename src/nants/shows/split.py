@@ -10,11 +10,11 @@ from pathlib import Path
 import torch
 from PIL import Image
 
-import colony
-import paint
-import showcase
-import train
-from leniaghton.world import World
+from nants.shows import colony
+from nants.shows import paint
+from nants.shows import showcase
+from nants import train
+from nants.world import World
 
 ANTS = 8  # half face up, half face down
 
