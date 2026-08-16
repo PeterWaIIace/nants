@@ -16,6 +16,8 @@ dependencies = [
 
 [project.scripts]
 nants-train = "nants.train:main"
+nants-menagerie = "nants.menagerie:main"
+nants-flock = "nants.flock:main"
 nants-showcase = "nants.shows.showcase:main"
 nants-crowd = "nants.shows.crowd:main"
 nants-colony = "nants.shows.colony:main"
@@ -26,6 +28,7 @@ nants-scatter = "nants.shows.scatter:main"
 nants-paint = "nants.shows.paint:main"
 nants-sample = "nants.shows.sample:main"
 nants-weights = "nants.shows.export_weights:main"
+nants-brains = "nants.shows.export_brains:main"
 
 [build-system]
 requires = ["uv_build>=0.9.27,<0.10.0"]

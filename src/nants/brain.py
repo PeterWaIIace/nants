@@ -12,23 +12,28 @@ from .ant import CLOCK_DIM, COMPASS_DIM, FACING_DIM
 class Brain:
     def __init__(
         self, batch, cell_dim, width=16, seed=0, scale=1.0, temp=1.0,
-        device="cpu", shared=False, zero_out=False,
+        device="cpu", shared=False, zero_out=False, groups=1,
     ):
         # shared=False: one brain per batch slot (sampling many random ants)
         # shared=True:  one brain, batch slots are just repeated rollouts (training)
+        # groups=G:     G brains, each owning one equal block of the batch, so
+        #               several pictures can be learned side by side in one go
         gen = torch.Generator(device=device).manual_seed(seed)
         self.gen = gen
         self.batch = batch
         self.cell_dim = cell_dim
         self.temp = temp
         self.device = device
+        self.groups = groups
+
+        rows = groups if groups > 1 else (1 if shared else batch)
 
         def w(a, b):
-            size = (1 if shared else batch, a, b)
+            size = (rows, a, b)
             return torch.randn(size, generator=gen, device=device) * (scale / a**0.5)
 
         def b(n):
-            return torch.zeros(1 if shared else batch, 1, n, device=device)
+            return torch.zeros(rows, 1, n, device=device)
 
         self.w1 = w(3 * cell_dim + CLOCK_DIM + COMPASS_DIM + FACING_DIM, width)  # what it senses
         self.write = w(width, cell_dim)  # what to add to the cell below
@@ -48,10 +53,15 @@ class Brain:
 
     def __call__(self, sense):
         """sense (B,3C) -> d_cell (B,C), move (B,), logp of that move (B,)"""
-        h = torch.relu(sense.unsqueeze(1) @ self.w1 + self.b1)
-        d_cell = (h @ self.write + self.b_write).squeeze(1)  # linear out, unbounded
+        # one row of weights per brain; the batch is split evenly between them,
+        # which covers all three cases: one shared brain, one each, or G groups
+        batch = sense.shape[0]
+        x = sense.view(self.w1.shape[0], -1, sense.shape[-1])
 
-        logits = (h @ self.move + self.b_move).squeeze(1) / self.temp
+        h = torch.relu(x @ self.w1 + self.b1)
+        d_cell = (h @ self.write + self.b_write).reshape(batch, -1)  # linear, unbounded
+
+        logits = (h @ self.move + self.b_move).reshape(batch, 3) / self.temp
         logits = torch.nan_to_num(logits, nan=0.0, posinf=20.0, neginf=-20.0)
         logp = torch.log_softmax(logits, dim=-1)
         move = torch.multinomial(logp.exp(), 1, generator=self.gen).squeeze(1)

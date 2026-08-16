@@ -10,6 +10,8 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
+import os
+
 import torch
 from PIL import Image, ImageDraw, ImageFont
 
@@ -31,6 +33,9 @@ EMOJI = "\N{LIZARD}"
 
 
 TARGET = "gecko"  # "green" / "square" diagnostics, or "gecko" for the real thing
+# the emoji font, overridable so the code runs on a machine without it installed
+FONT = os.environ.get("NANTS_FONT",
+                      "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf")
 GREEN = torch.tensor([-1.0, 0.2, -0.6])
 
 
@@ -48,9 +53,7 @@ def target_image():
     if TARGET == "square":
         return square_target()
 
-    font = ImageFont.truetype(
-        "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf", size=109
-    )
+    font = ImageFont.truetype(FONT, size=109)
     img = Image.new("RGB", (136, 136), "white")
     ImageDraw.Draw(img).text((14, 14), EMOJI, font=font, embedded_color=True)
 
@@ -107,12 +110,18 @@ def epoch(brain, target, opt, seed):
             logps.append(world.ant.logp)
 
         painted = world.field.cells[:, :, :, :3]
-        per_run = ((painted - target) ** 2).mean(dim=(1, 2, 3))
+        if target.dim() == 4:  # one target per group of runs, trained side by side
+            groups = target.shape[0]
+            spread = painted.view(groups, -1, *painted.shape[1:])
+            per_run = ((spread - target[:, None]) ** 2).mean(dim=(2, 3, 4))
+        else:
+            per_run = ((painted - target) ** 2).mean(dim=(1, 2, 3))
 
-        # advantage in raw mse units, so it stays comparable to the image loss
-        adv = -(per_run - per_run.mean()).detach()
+        # advantage in raw mse units, so it stays comparable to the image loss.
+        # the baseline is per group: a harder picture must not drag the others.
+        adv = -(per_run - per_run.mean(dim=-1, keepdim=True)).detach()
         # sum over steps and over ants: they share the one picture being scored
-        walked = torch.stack(logps).sum(dim=(0, 2))
+        walked = torch.stack(logps).sum(dim=(0, 2)).view(per_run.shape)
         reinforce = -(walked * adv).mean()
 
         (weights[k] * (per_run.mean() + POLICY_W * reinforce)).backward()
@@ -126,7 +135,8 @@ def epoch(brain, target, opt, seed):
         opt.step()
     opt.zero_grad()
 
-    return per_run.mean().item(), world  # score of the finished picture
+    # the score of the finished picture, one number per group
+    return per_run.detach().mean(dim=-1), world
 
 
 def save_png(world, target, path):
@@ -227,7 +237,8 @@ def main():
     best = min(losses, default=float("inf"))
 
     for e in range(len(losses), len(losses) + EPOCHS):
-        loss, world = epoch(brain, target, opt, seed=e)
+        scores, world = epoch(brain, target, opt, seed=e)
+        loss = scores.mean().item()
         losses.append(loss)
 
         if loss < best:  # keep the best brain we ever had, whatever happens later
