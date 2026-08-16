@@ -1,4 +1,4 @@
-# nants — neural ants
+# 🐜 Neural Ants — NAnts
 
 A colony of ants with a tiny brain each. None of them has ever seen a gecko.
 Together they draw one anyway.
