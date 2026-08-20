@@ -34,7 +34,7 @@ GECKO = 28  # the gecko itself spans this many cells, the rest is breathing room
 EMOJI = "\N{LIZARD}"
 
 
-TARGET = "gecko"  # "green" / "square" / "gecko", or "gates" for ncpu-style logic gates
+TARGET = "gecko"  # "green" / "square" / "gecko", "gates" or "ncpu" for logic gates
 GATE = "AND"      # which truth table to grow when TARGET == "gates"
 GATE_R = 2        # radius of one bit's disc, in cells
 IO_DX = 14        # input and output discs sit this far left/right of the landmark
@@ -44,6 +44,27 @@ MASK_W = 0.8      # ncpu's combined loss: 0.8 on the output disc, 0.2 on the fie
 FONT = os.environ.get("NANTS_FONT",
                       "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf")
 GREEN = torch.tensor([-1.0, 0.2, -0.6])
+
+# ncpu-style circle targets (loaded lazily only when TARGET == "ncpu")
+NCPU_TASK = None
+
+
+def _get_ncpu_task():
+    """Lazily build and cache the NCPUGateTask so its state persists across epochs."""
+    global NCPU_TASK
+    if NCPU_TASK is None:
+        from nants.ncpu_gates import NCPUGateTask
+        NCPU_TASK = NCPUGateTask(
+            gate=GATE,
+            size=SIZE,
+            batch=BATCH,
+            cell_dim=CELL_DIM,
+            device=DEVICE,
+            r=4,
+            input_bits=2,
+            io_gap=6,
+        )
+    return NCPU_TASK
 
 
 def square_target():
@@ -100,17 +121,24 @@ LANDMARK = [
 ]
 
 
-def epoch(brain, target, opt, seed, task=None):
-    """One rollout, graded more and more strictly as the picture fills in."""
-    if task is None:
+def epoch(brain, opt, seed, task=None):
+    """One rollout, graded more and more strictly as the picture fills in.
+
+    When *task* is given its ``regenerate()`` is called first so every
+    epoch sees freshly randomised bits (for ncpu-style dynamic targets).
+    """
+    if task is not None:
+        task.regenerate()
+        target = task.target[..., :3]       # picture channels only, (G, H, W, 3)
+        world = task.make_world(
+            brain, seed=seed, steps=STEPS, ants=ANTS, scatter=SCATTER,
+        )
+    else:
         world = World(
             brain, SIZE, seed=seed, noise=0.0, init=WHITE, landmark=LANDMARK,
             horizon=STEPS, ants=ANTS, scatter=SCATTER,
         )
-    else:
-        world = task.make_world(
-            brain, seed=seed, steps=STEPS, ants=ANTS, scatter=SCATTER,
-        )
+        target = target_image().to(DEVICE)  # static target, recomputed each call
 
     chunks = STEPS // CHUNK
     weights = torch.arange(1, chunks + 1, dtype=torch.float32)
@@ -207,6 +235,9 @@ def write_config(run):
     if TARGET == "gates":
         settings.update(gate=GATE, gate_r=GATE_R, io_dx=IO_DX,
                         io_dy=IO_DY, mask_w=MASK_W)
+    elif TARGET == "ncpu":
+        settings.update(gate=GATE, mask_w=MASK_W, circle_r=4, io_gap=6,
+                        input_bits=2)
     lines = [f"{k} = {v}" for k, v in settings.items()]
     (run / "config.txt").write_text("\n".join(lines) + "\n")
 
@@ -282,11 +313,13 @@ def main():
             GATE, LANDMARK, SIZE, BATCH, CELL_DIM, DEVICE,
             r=GATE_R, io_dx=IO_DX, io_dy=IO_DY,
         )
-        target = task.target[..., :3]  # (G, H, W, 3), picture channels only
+        vis_target = task.target[0, ..., :3]
+    elif TARGET == "ncpu":
+        task = _get_ncpu_task()
+        vis_target = task.target[0, ..., :3]
     else:
-        target = target_image().to(DEVICE)
-
-    vis_target = target[0] if target.dim() == 4 else target
+        task = None
+        vis_target = target_image().to(DEVICE)
 
     brain = Brain(
         BATCH, cell_dim=CELL_DIM, width=128, seed=0,
@@ -300,7 +333,7 @@ def main():
     pbar = tqdm(range(len(losses), len(losses) + EPOCHS), initial=len(losses),
                 total=len(losses) + EPOCHS, desc="training")
     for e in pbar:
-        scores, world = epoch(brain, target, opt, seed=e, task=task)
+        scores, world = epoch(brain, opt, seed=e, task=task)
         loss = scores.mean().item()
         losses.append(loss)
 
