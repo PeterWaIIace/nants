@@ -14,6 +14,7 @@ import os
 
 import torch
 from PIL import Image, ImageDraw, ImageFont
+from tqdm.auto import tqdm
 
 from nants.ant import LIMIT
 from nants.brain import Brain
@@ -32,7 +33,12 @@ GECKO = 28  # the gecko itself spans this many cells, the rest is breathing room
 EMOJI = "\N{LIZARD}"
 
 
-TARGET = "gecko"  # "green" / "square" diagnostics, or "gecko" for the real thing
+TARGET = "gecko"  # "green" / "square" / "gecko", or "gates" for ncpu-style logic gates
+GATE = "AND"      # which truth table to grow when TARGET == "gates"
+GATE_R = 2        # radius of one bit's disc, in cells
+IO_DX = 14        # input and output discs sit this far left/right of the landmark
+IO_DY = 5         # vertical spacing between input discs
+MASK_W = 0.8      # ncpu's combined loss: 0.8 on the output disc, 0.2 on the field
 # the emoji font, overridable so the code runs on a machine without it installed
 FONT = os.environ.get("NANTS_FONT",
                       "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf")
@@ -93,11 +99,18 @@ LANDMARK = [
 ]
 
 
-def epoch(brain, target, opt, seed):
+def epoch(brain, target, opt, seed, task=None):
     """One rollout, graded more and more strictly as the picture fills in."""
-    world = World(
-        brain, SIZE, seed=seed, noise=0.0, init=WHITE, landmark=LANDMARK, horizon=STEPS, ants=ANTS, scatter=SCATTER
-    )
+    if task is None:
+        world = World(
+            brain, SIZE, seed=seed, noise=0.0, init=WHITE, landmark=LANDMARK,
+            horizon=STEPS, ants=ANTS, scatter=SCATTER,
+        )
+    else:
+        world = task.make_world(
+            brain, seed=seed, steps=STEPS, ants=ANTS, scatter=SCATTER,
+        )
+
     chunks = STEPS // CHUNK
     weights = torch.arange(1, chunks + 1, dtype=torch.float32)
     weights = weights / weights.sum()  # late chunks matter most
@@ -113,7 +126,15 @@ def epoch(brain, target, opt, seed):
         if target.dim() == 4:  # one target per group of runs, trained side by side
             groups = target.shape[0]
             spread = painted.view(groups, -1, *painted.shape[1:])
-            per_run = ((spread - target[:, None]) ** 2).mean(dim=(2, 3, 4))
+            diff2 = ((spread - target[:, None]) ** 2).mean(dim=4)  # (G, n, H, W)
+            if task is not None:
+                # ncpu's combined loss: 0.8 on the output disc, 0.2 on the field
+                mask = task.out_mask  # (G, H, W)
+                spots = mask.sum(dim=(1, 2))[:, None]  # (G, 1)
+                per_run = MASK_W * (diff2 * mask[:, None]).sum(dim=(2, 3)) / spots \
+                        + (1 - MASK_W) * diff2.mean(dim=(2, 3))
+            else:
+                per_run = diff2.mean(dim=(2, 3))
         else:
             per_run = ((painted - target) ** 2).mean(dim=(1, 2, 3))
 
@@ -181,6 +202,9 @@ def write_config(run):
         "chunk": CHUNK, "policy_w": POLICY_W, "cell_dim": CELL_DIM, "device": DEVICE,
         "ants": ANTS,
     }
+    if TARGET == "gates":
+        settings.update(gate=GATE, gate_r=GATE_R, io_dx=IO_DX,
+                        io_dy=IO_DY, mask_w=MASK_W)
     lines = [f"{k} = {v}" for k, v in settings.items()]
     (run / "config.txt").write_text("\n".join(lines) + "\n")
 
@@ -226,7 +250,19 @@ def main():
     write_config(run)
     print(f"run: {run}", flush=True)
 
-    target = target_image().to(DEVICE)
+    task = None
+    if TARGET == "gates":
+        from nants import gates
+        task = gates.GateTask(
+            GATE, LANDMARK, SIZE, BATCH, CELL_DIM, DEVICE,
+            r=GATE_R, io_dx=IO_DX, io_dy=IO_DY,
+        )
+        target = task.target[..., :3]  # (G, H, W, 3), picture channels only
+    else:
+        target = target_image().to(DEVICE)
+
+    vis_target = target[0] if target.dim() == 4 else target
+
     brain = Brain(
         BATCH, cell_dim=CELL_DIM, width=128, seed=0,
         device=DEVICE, shared=True, zero_out=True,
@@ -236,29 +272,40 @@ def main():
     losses = load_ckpt(brain, opt, run / "brain.pt")
     best = min(losses, default=float("inf"))
 
-    for e in range(len(losses), len(losses) + EPOCHS):
-        scores, world = epoch(brain, target, opt, seed=e)
+    pbar = tqdm(range(len(losses), len(losses) + EPOCHS), initial=len(losses),
+                total=len(losses) + EPOCHS, desc="training")
+    for e in pbar:
+        scores, world = epoch(brain, target, opt, seed=e, task=task)
         loss = scores.mean().item()
         losses.append(loss)
+
+        desc = f"mse {loss:.4f}"
+        if task is not None:
+            acc = task.exact_match(world)
+            desc += f"  acc {acc.mean().item():.3f}"
+        pbar.set_description(desc)
 
         if loss < best:  # keep the best brain we ever had, whatever happens later
             best = loss
             save_ckpt(brain, opt, losses, run / "best.pt")
-            save_png(world, target, run / "best.png")
+            save_png(world, vis_target, run / "best.png")
         if e % 25 == 0:
             line = f"epoch {e:5d}  mse {loss:.4f}"
-            print(line, flush=True)
+            if task is not None:
+                line += f"  acc {acc.mean().item():.3f}  " \
+                        + " ".join(f"{a.item():.2f}" for a in acc)
             with open(run / "train.log", "a") as log:
                 log.write(line + "\n")
-            save_png(world, target, run / "train.png")
-            save_curve(losses, target, run / "loss.png")
+            save_png(world, vis_target, run / "train.png")
+            save_curve(losses, vis_target, run / "loss.png")
             save_ckpt(brain, opt, losses, run / "brain.pt")
         if e % 100 == 0:
-            save_png(world, target, frames / f"{e:06d}.png")
+            save_png(world, vis_target, frames / f"{e:06d}.png")
         if e % 200 == 0:
             save_ckpt(brain, opt, losses, ckpts / f"{e:06d}.pt")
 
-    save_curve(losses, target, run / "loss.png")
+    pbar.close()
+    save_curve(losses, vis_target, run / "loss.png")
     save_ckpt(brain, opt, losses, run / "brain.pt")
 
 

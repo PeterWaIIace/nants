@@ -33,6 +33,18 @@ watchable while it runs. Stop with ctrl-c whenever you like.
 See [`starter/README.md`](starter/README.md) for what each file is, how to carry
 a run on, and what to change if you have no gpu.
 
+### Logic gates
+
+```bash
+uv run python starter/my_gates.py
+```
+
+Train the ants to compute a Boolean gate (AND, OR, XOR, …) instead of
+painting a picture. Inputs are pinned discs left of the landmark, the answer
+belongs in a disc on the right. Open
+[`starter/my_gates.py`](starter/my_gates.py), change the gate, and watch the
+accuracy climb.
+
 ## The demonstrations
 
 Each takes a run folder and writes a gif into it.
@@ -88,6 +100,7 @@ src/nants/
   brain.py      the network: 93 in, 128 hidden, 19 out
   world.py      the field, and the ants that share it
   train.py      the training loop
+  gates.py      ncpu-style logic gates as a task
   shows/        the demonstrations above
 starter/        one file to grow your own
 ```

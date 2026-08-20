@@ -40,9 +40,11 @@ class Field:
 class World:
     def __init__(
         self, brain, size, seed=0, noise=0.1, init=0.0, landmark=None, horizon=1500,
-        ants=1, scatter=0,
+        ants=1, scatter=0, pins=None,
     ):
-        """landmark: [((dx, dy), values), ...] painted at the middle of the field."""
+        """landmark: [((dx, dy), values), ...] painted at the middle of the field.
+        pins: (b, y, x, values) re-stamped after every step, so the ants can
+        read those cells forever but never overwrite them."""
         dev = brain.device
         gen = torch.Generator(device=dev).manual_seed(seed)
         batch = brain.batch
@@ -63,6 +65,7 @@ class World:
                 [angle.cos() * reach, angle.sin() * reach], dim=-1
             ).round().long()
 
+        self.pins = pins  # (b, y, x, values): re-stamped after every step
         self.ant = Ant(brain, start % size, horizon)
         if scatter:  # scattered ants face any which way; stacked ones all face up
             self.ant.heading = torch.randint(
@@ -77,6 +80,9 @@ class World:
 
     def step(self):
         self.ant.step(self.field)
+        if self.pins is not None:
+            b, y, x, v = self.pins
+            self.field.cells[b, y, x] = v
 
     def run(self, steps):
         for _ in range(steps):
