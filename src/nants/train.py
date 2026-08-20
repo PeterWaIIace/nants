@@ -6,6 +6,7 @@ Two gradient paths:
 """
 
 import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -24,7 +25,7 @@ SIZE = 48  # the field
 BATCH = 1024
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 STEPS = 6000
-CHUNK = 100  # truncate backprop every CHUNK steps
+CHUNK = 200  # truncate backprop every CHUNK steps
 POLICY_W = 1.0  # weight of the REINFORCE term against the image loss
 CLIP = 1.0  # largest gradient norm we let through
 ANTS = 8  # up to this many ants share a field; each world gets 1 to 8
@@ -118,9 +119,10 @@ def epoch(brain, target, opt, seed, task=None):
     opt.zero_grad()
     for k in range(chunks):
         logps = []
-        for _ in range(CHUNK):
-            world.step()
-            logps.append(world.ant.logp)
+        with torch.amp.autocast(device_type=DEVICE, dtype=torch.bfloat16):
+            for _ in range(CHUNK):
+                world.step()
+                logps.append(world.ant.logp)
 
         painted = world.field.cells[:, :, :, :3]
         if target.dim() == 4:  # one target per group of runs, trained side by side
@@ -214,6 +216,26 @@ def save_ckpt(brain, opt, losses, path):
     torch.save({"w": weights, "opt": opt.state_dict(), "losses": losses}, path)
 
 
+_prev_ckpt_thread = None
+
+
+def save_ckpt_async(brain, opt, losses, path):
+    """Save checkpoint in a background thread so I/O never stalls training."""
+    global _prev_ckpt_thread
+    if _prev_ckpt_thread is not None:
+        _prev_ckpt_thread.join()
+
+    weights = [p.detach().clone() for p in brain.parameters()]
+    state = opt.state_dict()
+    loss_copy = list(losses)
+
+    def _save():
+        torch.save({"w": weights, "opt": state, "losses": loss_copy}, path)
+
+    _prev_ckpt_thread = threading.Thread(target=_save, daemon=True)
+    _prev_ckpt_thread.start()
+
+
 def load_ckpt(brain, opt, path):
     """Resume if a checkpoint exists. Returns the loss history so far."""
     if not path.exists():
@@ -229,14 +251,17 @@ def load_ckpt(brain, opt, path):
 
 
 def speed_up():
-    """Fuse the sensing into fewer, larger gpu kernels: about 1.5x per epoch.
+    """Fuse the entire step (sense + brain + write + move) into fewer GPU kernels.
 
-    Only `sense` is worth compiling. The brain samples its move with a
-    generator, which defeats the compiler and comes out slower.
+    Compiling Ant.step gives ~2-3x over the baseline.  The brain uses the
+    gumbel-max trick instead of multinomial so the compiler can fuse the
+    sampling into the same graph.
     """
-    from nants import ant as ant_module
+    from nants.brain import Brain as BrainClass
+    BrainClass._use_gumbel = True
 
-    ant_module.Ant.sense = torch.compile(ant_module.Ant.sense)
+    from nants import ant as ant_module
+    ant_module.Ant.step = torch.compile(ant_module.Ant.step)
 
 
 def main():
@@ -287,7 +312,7 @@ def main():
 
         if loss < best:  # keep the best brain we ever had, whatever happens later
             best = loss
-            save_ckpt(brain, opt, losses, run / "best.pt")
+            save_ckpt_async(brain, opt, losses, run / "best.pt")
             save_png(world, vis_target, run / "best.png")
         if e % 25 == 0:
             line = f"epoch {e:5d}  mse {loss:.4f}"
@@ -298,7 +323,7 @@ def main():
                 log.write(line + "\n")
             save_png(world, vis_target, run / "train.png")
             save_curve(losses, vis_target, run / "loss.png")
-            save_ckpt(brain, opt, losses, run / "brain.pt")
+            save_ckpt_async(brain, opt, losses, run / "brain.pt")
         if e % 100 == 0:
             save_png(world, vis_target, frames / f"{e:06d}.png")
         if e % 200 == 0:

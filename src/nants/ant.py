@@ -61,7 +61,7 @@ class Ant:
         # 0 is how it was trained: gradients along the grid's own axes.
         self.twist = torch.zeros(pos.shape[:2], device=pos.device)
         self.horizon = horizon  # how long a run lasts, for the clock
-        self.t = 0
+        self.t = torch.tensor(0, device=pos.device, dtype=torch.float32)
 
         self.ring = RING.to(pos.device)
         self.turns = TURNS.to(pos.device)
