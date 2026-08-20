@@ -34,8 +34,8 @@ GECKO = 28  # the gecko itself spans this many cells, the rest is breathing room
 EMOJI = "\N{LIZARD}"
 
 
-TARGET = "gecko"  # "green" / "square" / "gecko", "gates" or "ncpu" for logic gates
-GATE = "AND"      # which truth table to grow when TARGET == "gates"
+TARGET = "ncpu"   # "green" / "square" / "gecko", "gates" or "ncpu" for logic gates
+GATE = "XOR"      # which truth table to grow when TARGET == "gates" or "ncpu"
 GATE_R = 2        # radius of one bit's disc, in cells
 IO_DX = 14        # input and output discs sit this far left/right of the landmark
 IO_DY = 5         # vertical spacing between input discs
