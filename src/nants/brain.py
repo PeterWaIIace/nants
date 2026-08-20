@@ -28,10 +28,6 @@ class Brain(nn.Module):
         self.device_ = device
         self.groups = groups
 
-    @property
-    def device(self):
-        return self.device_
-
         rows = groups if groups > 1 else (1 if shared else batch)
         self.rows = rows
 
@@ -53,6 +49,10 @@ class Brain(nn.Module):
         if zero_out:
             with torch.no_grad():
                 self.write.zero_()
+
+    @property
+    def device(self):
+        return self.device_
 
     def forward(self, sense):
         """sense (B,3C) -> d_cell (B,C), move (B,), logp of that move (B,)"""
