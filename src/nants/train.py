@@ -141,7 +141,7 @@ def epoch(brain, opt, seed, task=None):
         target = target_image().to(DEVICE)  # static target, recomputed each call
 
     chunks = STEPS // CHUNK
-    weights = torch.arange(1, chunks + 1, dtype=torch.float32)
+    weights = torch.arange(1, chunks + 1, dtype=torch.float32, device=DEVICE)
     weights = weights / weights.sum()  # late chunks matter most
 
     opt.zero_grad()

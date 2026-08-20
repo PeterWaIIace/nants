@@ -38,19 +38,19 @@ def _circle_coords(r):
     ]
 
 
-def _shade(bit, cell_dim):
+def _shade(bit, cell_dim, device="cpu"):
     """A full cell vector for one bit: R=G=B=sink value, scratch alive."""
     return torch.tensor(
         [INK[bit]] * 3 + [1.0] * (cell_dim - 3),
-        dtype=torch.float32,
+        dtype=torch.float32, device=device,
     )
 
 
-def _empty_cell(cell_dim):
+def _empty_cell(cell_dim, device="cpu"):
     """Grey background cell."""
     return torch.tensor(
         [EMPTY] * 3 + [1.0] * (cell_dim - 3),
-        dtype=torch.float32,
+        dtype=torch.float32, device=device,
     )
 
 
@@ -96,7 +96,7 @@ class NCPUGateTask:
             self.gen.manual_seed(seed)
 
         self.cells = _circle_coords(r)
-        self.empty = _empty_cell(cell_dim)
+        self.empty = _empty_cell(cell_dim, device)
 
         # pre-allocate tensors (will be filled by regenerate)
         self.init = None
@@ -134,7 +134,7 @@ class NCPUGateTask:
 
     def _stamp_circle(self, screen, cy, cx, bit, pinned):
         """Stamp one circle onto `screen` and append to `pinned` list."""
-        shade = _shade(bit, self.cell_dim)
+        shade = _shade(bit, self.cell_dim, screen.device)
         for dy, dx in self.cells:
             y, x = cy + dy, cx + dx
             if 0 <= y < self.size and 0 <= x < self.size:
