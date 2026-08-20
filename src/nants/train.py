@@ -5,6 +5,7 @@ Two gradient paths:
   - where it walks  -> REINFORCE, since the move is a discrete sample
 """
 
+import argparse
 import sys
 import threading
 from datetime import datetime
@@ -296,6 +297,46 @@ def speed_up():
 
 
 def main():
+    global EPOCHS, STEPS, TARGET, GATE, BATCH, SIZE, DEVICE
+
+    parser = argparse.ArgumentParser(description="nants training")
+    parser.add_argument("--epochs", type=int, default=EPOCHS, help=f"training epochs (default {EPOCHS})")
+    parser.add_argument("--steps", type=int, default=STEPS, help=f"ant steps per rollout (default {STEPS})")
+    parser.add_argument("--batch", type=int, default=BATCH, help=f"batch size (default {BATCH})")
+    parser.add_argument("--size", type=int, default=SIZE, help=f"field size (default {SIZE})")
+    parser.add_argument("--target", default=TARGET, choices=["green", "square", "gecko", "gates", "ncpu"],
+                        help=f"target type (default {TARGET})")
+    parser.add_argument("--gate", default=GATE, choices=["AND", "OR", "NAND", "NOR", "XOR", "XNOR"],
+                        help=f"gate truth table (default {GATE})")
+    parser.add_argument("--device", default=DEVICE, choices=["cpu", "cuda", "cuda:0", "cuda:1"],
+                        help=f"device (default {DEVICE})")
+    args = parser.parse_args()
+
+    EPOCHS = args.epochs
+    STEPS = args.steps
+    BATCH = args.batch
+    SIZE = args.size
+    TARGET = args.target
+    GATE = args.gate
+    DEVICE = args.device
+
+    print("=" * 60)
+    print("  nants training")
+    print("=" * 60)
+    print(f"  device       : {DEVICE}")
+    print(f"  target       : {TARGET}")
+    if TARGET in ("gates", "ncpu"):
+        print(f"  gate         : {GATE}")
+    print(f"  field size   : {SIZE}x{SIZE}")
+    print(f"  batch        : {BATCH}")
+    print(f"  rollout steps: {STEPS}")
+    print(f"  epochs       : {EPOCHS}")
+    print(f"  chunk        : {CHUNK}")
+    print(f"  ants         : {ANTS}")
+    print(f"  cell_dim     : {CELL_DIM}")
+    print(f"  policy_w     : {POLICY_W}")
+    print("=" * 60, flush=True)
+
     if DEVICE == "cuda":
         speed_up()
 
