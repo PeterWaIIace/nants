@@ -28,6 +28,10 @@ class Brain(nn.Module):
         self.device_ = device
         self.groups = groups
 
+    @property
+    def device(self):
+        return self.device_
+
         rows = groups if groups > 1 else (1 if shared else batch)
         self.rows = rows
 
